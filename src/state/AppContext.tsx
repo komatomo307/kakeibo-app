@@ -17,6 +17,7 @@ import {
 } from "../domain/models/accounting";
 import {
   deleteJournalEntry,
+  ensureOpeningBalanceEntries,
   ensureUserSettings,
   fetchMonthlyEntries,
   saveUserSettings as saveUserSettingsRepository,
@@ -164,13 +165,21 @@ export function AppStateProvider({ children }: PropsWithChildren) {
         const rows = await withTimeout(
           fetchMonthlyEntries(userId, state.selectedMonthKey),
         );
+        const createdOpeningEntries = await withTimeout(
+          ensureOpeningBalanceEntries(userId, state.selectedMonthKey, rows),
+        );
+        const rowsWithOpening = createdOpeningEntries
+          ? await withTimeout(
+              fetchMonthlyEntries(userId, state.selectedMonthKey),
+            )
+          : rows;
 
         if (!active) {
           return;
         }
 
         dispatch({ type: "bootstrap", payload: { userId, settings } });
-        dispatch({ type: "setEntries", payload: rows });
+        dispatch({ type: "setEntries", payload: rowsWithOpening });
       } catch (error) {
         if (active) {
           const fallbackSettings: UserSettings = {

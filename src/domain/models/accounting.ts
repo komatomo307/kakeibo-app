@@ -47,6 +47,8 @@ export interface JournalEntry {
   paymentSourceAccountId: string;
   paymentSourceAccountName: string;
   isTransferLike?: boolean;
+  isSystemGenerated?: boolean;
+  systemType?: "opening-balance";
   createdAt: number;
   updatedAt: number;
 }

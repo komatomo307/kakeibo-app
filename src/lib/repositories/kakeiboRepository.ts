@@ -8,6 +8,11 @@ import {
   query,
   setDoc,
 } from "firebase/firestore";
+import dayjs from "dayjs";
+import {
+  buildOpeningBalanceEntries,
+  calculateCarryForwardBalances,
+} from "../../domain/accounting/openingBalance";
 import {
   DEFAULT_CATEGORIES,
   DEFAULT_PAYMENT_SOURCES,
@@ -130,6 +135,58 @@ export async function fetchMonthlyEntries(
       userId,
     };
   });
+}
+
+export async function ensureOpeningBalanceEntries(
+  userId: string,
+  monthKey: YYYYMM,
+  currentMonthEntries?: JournalEntry[],
+): Promise<boolean> {
+  const existingEntries =
+    currentMonthEntries ?? (await fetchMonthlyEntries(userId, monthKey));
+
+  if (existingEntries.some((entry) => entry.systemType === "opening-balance")) {
+    return false;
+  }
+
+  const previousMonthKey = dayjs(`${monthKey}01`)
+    .subtract(1, "month")
+    .format("YYYYMM");
+  const previousMonthEntries = await fetchMonthlyEntries(
+    userId,
+    previousMonthKey,
+  );
+
+  if (previousMonthEntries.length === 0) {
+    return false;
+  }
+
+  const balances = calculateCarryForwardBalances(previousMonthEntries);
+  const openingEntries = buildOpeningBalanceEntries(userId, monthKey, balances);
+
+  if (openingEntries.length === 0) {
+    return false;
+  }
+
+  await Promise.all(
+    openingEntries.map((entry) =>
+      setDoc(entryDocRef(userId, monthKey, entry.id), entry, {
+        merge: true,
+      }),
+    ),
+  );
+
+  await setDoc(
+    monthlyDocRef(userId, monthKey),
+    {
+      monthKey,
+      userId,
+      updatedAt: Date.now(),
+    },
+    { merge: true },
+  );
+
+  return true;
 }
 
 export async function upsertJournalEntry(

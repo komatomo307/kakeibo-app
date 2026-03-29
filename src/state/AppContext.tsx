@@ -9,6 +9,7 @@ import {
   useReducer,
   useState,
 } from "react";
+import { type AccountBalanceSnapshot } from "../domain/accounting/openingBalance";
 import {
   DEFAULT_CATEGORIES,
   DEFAULT_PAYMENT_SOURCES,
@@ -17,7 +18,7 @@ import {
 } from "../domain/models/accounting";
 import {
   deleteJournalEntry,
-  ensureOpeningBalanceEntries,
+  ensureMonthlyOpeningSnapshot,
   ensureUserSettings,
   fetchMonthlyEntries,
   saveUserSettings as saveUserSettingsRepository,
@@ -54,10 +55,18 @@ interface AppState {
   selectedMonthKey: string;
   settings: UserSettings | null;
   entries: JournalEntry[];
+  openingBalancesSnapshot: AccountBalanceSnapshot;
 }
 
 type AppAction =
-  | { type: "bootstrap"; payload: { userId: string; settings: UserSettings } }
+  | {
+      type: "bootstrap";
+      payload: {
+        userId: string;
+        settings: UserSettings;
+        openingBalancesSnapshot: AccountBalanceSnapshot;
+      };
+    }
   | { type: "setMonth"; payload: string }
   | { type: "setEntries"; payload: JournalEntry[] }
   | { type: "setSettings"; payload: UserSettings }
@@ -85,6 +94,7 @@ const initialState: AppState = {
   selectedMonthKey: dayjs().format("YYYYMM"),
   settings: null,
   entries: [],
+  openingBalancesSnapshot: {},
 };
 
 function appReducer(state: AppState, action: AppAction): AppState {
@@ -94,6 +104,7 @@ function appReducer(state: AppState, action: AppAction): AppState {
         ...state,
         userId: action.payload.userId,
         settings: action.payload.settings,
+        openingBalancesSnapshot: action.payload.openingBalancesSnapshot,
       };
     case "setMonth":
       return { ...state, selectedMonthKey: action.payload };
@@ -148,7 +159,11 @@ export function AppStateProvider({ children }: PropsWithChildren) {
 
         dispatch({
           type: "bootstrap",
-          payload: { userId: "", settings: bootSettings },
+          payload: {
+            userId: "",
+            settings: bootSettings,
+            openingBalancesSnapshot: {},
+          },
         });
         dispatch({ type: "setEntries", payload: [] });
         setErrorMessage(
@@ -162,24 +177,22 @@ export function AppStateProvider({ children }: PropsWithChildren) {
       setErrorMessage(null);
       try {
         const settings = await withTimeout(ensureUserSettings(userId));
+        const openingBalancesSnapshot = await withTimeout(
+          ensureMonthlyOpeningSnapshot(userId, state.selectedMonthKey),
+        );
         const rows = await withTimeout(
           fetchMonthlyEntries(userId, state.selectedMonthKey),
         );
-        const createdOpeningEntries = await withTimeout(
-          ensureOpeningBalanceEntries(userId, state.selectedMonthKey, rows),
-        );
-        const rowsWithOpening = createdOpeningEntries
-          ? await withTimeout(
-              fetchMonthlyEntries(userId, state.selectedMonthKey),
-            )
-          : rows;
 
         if (!active) {
           return;
         }
 
-        dispatch({ type: "bootstrap", payload: { userId, settings } });
-        dispatch({ type: "setEntries", payload: rowsWithOpening });
+        dispatch({
+          type: "bootstrap",
+          payload: { userId, settings, openingBalancesSnapshot },
+        });
+        dispatch({ type: "setEntries", payload: rows });
       } catch (error) {
         if (active) {
           const fallbackSettings: UserSettings = {
@@ -194,7 +207,11 @@ export function AppStateProvider({ children }: PropsWithChildren) {
 
           dispatch({
             type: "bootstrap",
-            payload: { userId, settings: fallbackSettings },
+            payload: {
+              userId,
+              settings: fallbackSettings,
+              openingBalancesSnapshot: {},
+            },
           });
           dispatch({ type: "setEntries", payload: [] });
 
@@ -333,7 +350,9 @@ export function AppStateProvider({ children }: PropsWithChildren) {
   const monthEntries = useMemo(
     () =>
       state.entries.filter(
-        (entry) => entry.monthKey === state.selectedMonthKey,
+        (entry) =>
+          entry.monthKey === state.selectedMonthKey &&
+          entry.systemType !== "opening-balance",
       ),
     [state.entries, state.selectedMonthKey],
   );

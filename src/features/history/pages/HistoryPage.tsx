@@ -102,11 +102,6 @@ export function HistoryPage() {
         ) : (
           monthEntries.map((entry) => (
             <li key={entry.id} className="rounded-2xl bg-white p-4 shadow-sm">
-              {entry.systemType === "opening-balance" ? (
-                <p className="mb-2 inline-flex rounded-lg bg-slate-100 px-2 py-1 text-[10px] font-semibold text-slate-600">
-                  システム仕訳（期首繰越）
-                </p>
-              ) : null}
               <div className="flex items-center justify-between gap-2">
                 <p
                   className={`text-sm font-semibold ${
@@ -133,26 +128,22 @@ export function HistoryPage() {
                   摘要: {entry.description}
                 </p>
               ) : null}
-              {entry.systemType !== "opening-balance" ? (
-                <>
-                  <button
-                    type="button"
-                    disabled={syncing}
-                    onClick={() => openEditor(entry)}
-                    className="mt-3 mr-2 rounded-lg border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 disabled:opacity-50"
-                  >
-                    編集
-                  </button>
-                  <button
-                    type="button"
-                    disabled={syncing}
-                    onClick={() => void deleteEntry(entry)}
-                    className="mt-3 rounded-lg border border-rose-200 px-3 py-1 text-xs font-semibold text-rose-700 disabled:opacity-50"
-                  >
-                    削除
-                  </button>
-                </>
-              ) : null}
+              <button
+                type="button"
+                disabled={syncing}
+                onClick={() => openEditor(entry)}
+                className="mt-3 mr-2 rounded-lg border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-700 disabled:opacity-50"
+              >
+                編集
+              </button>
+              <button
+                type="button"
+                disabled={syncing}
+                onClick={() => void deleteEntry(entry)}
+                className="mt-3 rounded-lg border border-rose-200 px-3 py-1 text-xs font-semibold text-rose-700 disabled:opacity-50"
+              >
+                削除
+              </button>
             </li>
           ))
         )}

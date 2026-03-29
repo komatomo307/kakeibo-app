@@ -10,13 +10,16 @@ import {
 } from "firebase/firestore";
 import dayjs from "dayjs";
 import {
-  buildOpeningBalanceEntries,
-  calculateCarryForwardBalances,
+  calculateEntriesBalanceDelta,
+  mergeBalanceSnapshots,
+  normalizeBalanceSnapshot,
+  type AccountBalanceSnapshot,
 } from "../../domain/accounting/openingBalance";
 import {
   DEFAULT_CATEGORIES,
   DEFAULT_PAYMENT_SOURCES,
   type JournalEntry,
+  type MonthlyTransactionsMeta,
   type UserSettings,
   type YYYYMM,
 } from "../../domain/models/accounting";
@@ -137,43 +140,46 @@ export async function fetchMonthlyEntries(
   });
 }
 
-export async function ensureOpeningBalanceEntries(
+export async function ensureMonthlyOpeningSnapshot(
   userId: string,
   monthKey: YYYYMM,
-  currentMonthEntries?: JournalEntry[],
-): Promise<boolean> {
-  const existingEntries =
-    currentMonthEntries ?? (await fetchMonthlyEntries(userId, monthKey));
+): Promise<AccountBalanceSnapshot> {
+  const currentMetaSnapshot = await getDoc(monthlyDocRef(userId, monthKey));
+  const currentMeta = currentMetaSnapshot.exists()
+    ? (currentMetaSnapshot.data() as MonthlyTransactionsMeta)
+    : null;
 
-  if (existingEntries.some((entry) => entry.systemType === "opening-balance")) {
-    return false;
+  if (currentMeta?.balancesSnapshot) {
+    return normalizeBalanceSnapshot(currentMeta.balancesSnapshot);
   }
 
   const previousMonthKey = dayjs(`${monthKey}01`)
     .subtract(1, "month")
     .format("YYYYMM");
+
+  const previousMonthMetaSnapshot = await getDoc(
+    monthlyDocRef(userId, previousMonthKey),
+  );
+  const previousMonthMeta = previousMonthMetaSnapshot.exists()
+    ? (previousMonthMetaSnapshot.data() as MonthlyTransactionsMeta)
+    : null;
+  const previousOpeningSnapshot = normalizeBalanceSnapshot(
+    previousMonthMeta?.balancesSnapshot ?? {},
+  );
+
   const previousMonthEntries = await fetchMonthlyEntries(
     userId,
     previousMonthKey,
   );
-
-  if (previousMonthEntries.length === 0) {
-    return false;
-  }
-
-  const balances = calculateCarryForwardBalances(previousMonthEntries);
-  const openingEntries = buildOpeningBalanceEntries(userId, monthKey, balances);
-
-  if (openingEntries.length === 0) {
-    return false;
-  }
-
-  await Promise.all(
-    openingEntries.map((entry) =>
-      setDoc(entryDocRef(userId, monthKey, entry.id), entry, {
-        merge: true,
-      }),
-    ),
+  const entriesForDelta = previousMonthMeta?.balancesSnapshot
+    ? previousMonthEntries.filter(
+        (entry) => entry.systemType !== "opening-balance",
+      )
+    : previousMonthEntries;
+  const previousMonthDelta = calculateEntriesBalanceDelta(entriesForDelta);
+  const currentOpeningSnapshot = mergeBalanceSnapshots(
+    previousOpeningSnapshot,
+    previousMonthDelta,
   );
 
   await setDoc(
@@ -181,12 +187,13 @@ export async function ensureOpeningBalanceEntries(
     {
       monthKey,
       userId,
+      balancesSnapshot: currentOpeningSnapshot,
       updatedAt: Date.now(),
     },
     { merge: true },
   );
 
-  return true;
+  return currentOpeningSnapshot;
 }
 
 export async function upsertJournalEntry(

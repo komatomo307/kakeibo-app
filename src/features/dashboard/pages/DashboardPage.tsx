@@ -1,5 +1,9 @@
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
+import {
+  fromSnapshotKey,
+  toSnapshotKey,
+} from "../../../domain/accounting/openingBalance";
 import { useAppState } from "../../../state/AppContext";
 
 const CHART_COLORS = ["#0f766e", "#14b8a6", "#2dd4bf", "#99f6e4", "#5eead4"];
@@ -7,6 +11,10 @@ const CHART_COLORS = ["#0f766e", "#14b8a6", "#2dd4bf", "#99f6e4", "#5eead4"];
 export function DashboardPage() {
   const { state, monthEntries, loading, errorMessage } = useAppState();
   const [bsFilterAccount, setBsFilterAccount] = useState<string>("all");
+
+  useEffect(() => {
+    setBsFilterAccount("all");
+  }, [state.selectedMonthKey]);
 
   if (loading) {
     return (
@@ -73,89 +81,123 @@ export function DashboardPage() {
     }),
   );
 
-  const accountKindByName = new Map<string, "asset" | "liability">();
-  for (const entry of monthEntries) {
-    if (
-      entry.debit.accountKind === "asset" ||
-      entry.debit.accountKind === "liability"
-    ) {
-      accountKindByName.set(entry.debit.accountName, entry.debit.accountKind);
-    }
-    if (
-      entry.credit.accountKind === "asset" ||
-      entry.credit.accountKind === "liability"
-    ) {
-      accountKindByName.set(entry.credit.accountName, entry.credit.accountKind);
-    }
-  }
-
-  for (const source of state.settings?.paymentSources ?? []) {
-    accountKindByName.set(source.name, source.accountKind);
-  }
-
   const journalRows = monthEntries
     .slice()
     .sort((a, b) => a.occurredOn.localeCompare(b.occurredOn));
 
-  const bsFilterOptions = useMemo(() => {
-    const names = new Set<string>();
-    for (const source of state.settings?.paymentSources ?? []) {
-      names.add(source.name);
-    }
-    for (const row of journalRows) {
-      names.add(row.debit.accountName);
-      names.add(row.credit.accountName);
-    }
+  const accountNameById = new Map<string, string>();
+  for (const source of state.settings?.paymentSources ?? []) {
+    accountNameById.set(source.id, source.name);
+  }
+  for (const row of journalRows) {
+    accountNameById.set(row.debit.accountId, row.debit.accountName);
+    accountNameById.set(row.credit.accountId, row.credit.accountName);
+  }
 
-    return ["all", ...Array.from(names)];
-  }, [state.settings, journalRows]);
+  const openingBalanceRows = Object.entries(state.openingBalancesSnapshot)
+    .map(([key, amount]) => {
+      const parsed = fromSnapshotKey(key);
+      if (!parsed) {
+        return null;
+      }
 
-  const filteredJournalRows = useMemo(() => {
-    if (bsFilterAccount === "all") {
-      return journalRows;
-    }
+      const accountName =
+        accountNameById.get(parsed.accountId) ?? parsed.accountId;
 
-    return journalRows.filter(
-      (entry) =>
-        entry.debit.accountName === bsFilterAccount ||
-        entry.credit.accountName === bsFilterAccount ||
-        entry.paymentSourceAccountName === bsFilterAccount,
-    );
-  }, [journalRows, bsFilterAccount]);
+      return {
+        snapshotKey: key,
+        accountId: parsed.accountId,
+        accountKind: parsed.accountKind,
+        accountName,
+        amount,
+      };
+    })
+    .filter((row): row is NonNullable<typeof row> => row !== null)
+    .sort((a, b) => a.accountName.localeCompare(b.accountName));
+
+  const totalOpeningAssets = openingBalanceRows
+    .filter((row) => row.accountKind === "asset")
+    .reduce((sum, row) => sum + row.amount, 0);
+  const totalOpeningLiabilities = openingBalanceRows
+    .filter((row) => row.accountKind === "liability")
+    .reduce((sum, row) => sum + Math.max(row.amount, 0), 0);
+
+  const names = new Set<string>();
+  for (const source of state.settings?.paymentSources ?? []) {
+    names.add(source.name);
+  }
+  for (const row of openingBalanceRows) {
+    names.add(row.accountName);
+  }
+  for (const row of journalRows) {
+    names.add(row.debit.accountName);
+    names.add(row.credit.accountName);
+  }
+  const bsFilterOptions = ["all", ...Array.from(names)];
+
+  const filteredJournalRows =
+    bsFilterAccount === "all"
+      ? journalRows
+      : journalRows.filter(
+          (entry) =>
+            entry.debit.accountName === bsFilterAccount ||
+            entry.credit.accountName === bsFilterAccount ||
+            entry.paymentSourceAccountName === bsFilterAccount,
+        );
 
   const bsBalanceMap = new Map<string, number>();
+  for (const row of openingBalanceRows) {
+    if (bsFilterAccount !== "all" && row.accountName !== bsFilterAccount) {
+      continue;
+    }
+    bsBalanceMap.set(row.snapshotKey, row.amount);
+  }
+
   for (const entry of filteredJournalRows) {
     if (entry.debit.accountKind === "asset") {
-      const current = bsBalanceMap.get(entry.debit.accountName) ?? 0;
-      bsBalanceMap.set(entry.debit.accountName, current + entry.debit.amount);
+      const key = toSnapshotKey("asset", entry.debit.accountId);
+      const current = bsBalanceMap.get(key) ?? 0;
+      bsBalanceMap.set(key, current + entry.debit.amount);
     }
     if (entry.debit.accountKind === "liability") {
-      const current = bsBalanceMap.get(entry.debit.accountName) ?? 0;
-      bsBalanceMap.set(entry.debit.accountName, current - entry.debit.amount);
+      const key = toSnapshotKey("liability", entry.debit.accountId);
+      const current = bsBalanceMap.get(key) ?? 0;
+      bsBalanceMap.set(key, current - entry.debit.amount);
     }
     if (entry.credit.accountKind === "asset") {
-      const current = bsBalanceMap.get(entry.credit.accountName) ?? 0;
-      bsBalanceMap.set(entry.credit.accountName, current - entry.credit.amount);
+      const key = toSnapshotKey("asset", entry.credit.accountId);
+      const current = bsBalanceMap.get(key) ?? 0;
+      bsBalanceMap.set(key, current - entry.credit.amount);
     }
     if (entry.credit.accountKind === "liability") {
-      const current = bsBalanceMap.get(entry.credit.accountName) ?? 0;
-      bsBalanceMap.set(entry.credit.accountName, current + entry.credit.amount);
+      const key = toSnapshotKey("liability", entry.credit.accountId);
+      const current = bsBalanceMap.get(key) ?? 0;
+      bsBalanceMap.set(key, current + entry.credit.amount);
     }
   }
 
-  const bsBalanceRows = [...bsBalanceMap.entries()].map(
-    ([accountName, amount]) => ({
-      accountName,
-      amount,
-    }),
-  );
+  const bsBalanceRows = [...bsBalanceMap.entries()]
+    .map(([snapshotKey, amount]) => {
+      const parsed = fromSnapshotKey(snapshotKey);
+      if (!parsed) {
+        return null;
+      }
+
+      return {
+        accountId: parsed.accountId,
+        accountName: accountNameById.get(parsed.accountId) ?? parsed.accountId,
+        accountKind: parsed.accountKind,
+        amount,
+      };
+    })
+    .filter((row): row is NonNullable<typeof row> => row !== null);
 
   const bsAssetRows = bsBalanceRows
-    .filter((row) => accountKindByName.get(row.accountName) === "asset")
+    .filter((row) => row.accountKind === "asset")
     .map((row) => ({ ...row, amount: row.amount }));
 
   const bsLiabilityRows = bsBalanceRows
-    .filter((row) => accountKindByName.get(row.accountName) === "liability")
+    .filter((row) => row.accountKind === "liability")
     .map((row) => ({ ...row, amount: Math.max(row.amount, 0) }));
 
   const bsTotalAssets = bsAssetRows.reduce((sum, row) => sum + row.amount, 0);
@@ -226,6 +268,8 @@ export function DashboardPage() {
                   nameKey="name"
                   cx="50%"
                   cy="50%"
+                  startAngle={90}
+                  endAngle={-270}
                   outerRadius={80}
                 >
                   {pieData.map((item, index) => (
@@ -240,6 +284,52 @@ export function DashboardPage() {
             </ResponsiveContainer>
           )}
         </div>
+      </article>
+
+      <article className="rounded-2xl bg-white p-4 shadow-sm">
+        <h2 className="text-sm font-semibold text-slate-700">月初繰越残高</h2>
+        {openingBalanceRows.length === 0 ? (
+          <p className="mt-2 text-sm text-slate-500">
+            前月からの繰越はありません。
+          </p>
+        ) : (
+          <>
+            <div className="mt-2 grid grid-cols-2 gap-3">
+              <div className="rounded-xl bg-emerald-50 p-3">
+                <p className="text-xs text-emerald-700">繰越資産</p>
+                <p className="mt-1 text-base font-bold text-emerald-800">
+                  {totalOpeningAssets.toLocaleString()}円
+                </p>
+              </div>
+              <div className="rounded-xl bg-rose-50 p-3">
+                <p className="text-xs text-rose-700">繰越負債</p>
+                <p className="mt-1 text-base font-bold text-rose-800">
+                  {totalOpeningLiabilities.toLocaleString()}円
+                </p>
+              </div>
+            </div>
+
+            <ul className="mt-3 space-y-2">
+              {openingBalanceRows.map((row) => (
+                <li
+                  key={`opening-${row.snapshotKey}`}
+                  className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2"
+                >
+                  <span className="text-sm text-slate-700">
+                    {row.accountName}
+                  </span>
+                  <span
+                    className={`text-sm font-semibold ${
+                      row.amount >= 0 ? "text-emerald-700" : "text-rose-700"
+                    }`}
+                  >
+                    {row.amount.toLocaleString()}円
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
       </article>
 
       <article className="rounded-2xl bg-white p-4 shadow-sm">

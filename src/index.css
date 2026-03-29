@@ -1,0 +1,27 @@
+@import "tailwindcss";
+
+:root {
+  font-family:
+    "Noto Sans JP", "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  background: radial-gradient(
+    circle at 20% 0%,
+    #dff7f4 0%,
+    #f8fafc 45%,
+    #eef2ff 100%
+  );
+  color: #0f172a;
+}

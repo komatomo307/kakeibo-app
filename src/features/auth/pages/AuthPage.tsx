@@ -28,10 +28,10 @@ export function AuthPage() {
       <button
         type="button"
         onClick={() => void signInAsGuest()}
-        disabled={loading || authBusy}
+        disabled
         className="w-full rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 disabled:cursor-not-allowed disabled:bg-slate-100"
       >
-        ゲストで続ける
+        ゲストで続ける（一時停止中）
       </button>
       <p className="text-xs text-slate-400">
         状態: {loading ? "認証初期化中" : authBusy ? "認証処理中" : "待機中"}

@@ -2,7 +2,8 @@ import {
   GoogleAuthProvider,
   getRedirectResult,
   onAuthStateChanged,
-  signInAnonymously,
+  signOut,
+  // signInAnonymously,
   signInWithPopup,
   signInWithRedirect,
   type User,
@@ -24,6 +25,7 @@ interface AuthContextValue {
   authErrorMessage: string | null;
   signInWithGoogleAccount: () => Promise<void>;
   signInAsGuest: () => Promise<void>;
+  signOutCurrentUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -98,14 +100,21 @@ export function AuthProvider({ children }: PropsWithChildren) {
   };
 
   const signInAsGuest = async () => {
+    // 匿名認証は一時停止中。再開時は signInAnonymously の import と呼び出しを戻す。
+    setAuthErrorMessage(
+      "現在ゲスト利用は停止中です。Googleでログインしてください。",
+    );
+  };
+
+  const signOutCurrentUser = async () => {
     setAuthBusy(true);
     setAuthErrorMessage(null);
 
     try {
-      await signInAnonymously(firebaseAuth);
+      await signOut(firebaseAuth);
     } catch {
       setAuthErrorMessage(
-        "ゲストログインに失敗しました。匿名認証の有効化を確認してください。",
+        "ログアウトに失敗しました。時間をおいて再度お試しください。",
       );
     } finally {
       setAuthBusy(false);
@@ -120,6 +129,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       authErrorMessage,
       signInWithGoogleAccount,
       signInAsGuest,
+      signOutCurrentUser,
     }),
     [
       user,
@@ -128,6 +138,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       authErrorMessage,
       signInWithGoogleAccount,
       signInAsGuest,
+      signOutCurrentUser,
     ],
   );
 

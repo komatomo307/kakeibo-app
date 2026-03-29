@@ -7,10 +7,12 @@ import type {
 import { downloadMonthlyWorkbook } from "../../../lib/export/monthlyWorkbook";
 import { fetchMonthlyEntries } from "../../../lib/repositories/kakeiboRepository";
 import { useAppState } from "../../../state/AppContext";
+import { useAuth } from "../../../state/AuthContext";
 
 export function SettingsPage() {
   const { state, monthEntries, saveSettings, syncing, errorMessage } =
     useAppState();
+  const { authBusy, signOutCurrentUser } = useAuth();
   const settings = state.settings;
   const [newCategoryName, setNewCategoryName] = useState("");
   const [newCategoryKind, setNewCategoryKind] = useState<
@@ -327,6 +329,15 @@ export function SettingsPage() {
             : `${dayjs(`${exportMonthKey}01`).format("M月")}の帳票をダウンロード`}
         </button>
       </article>
+
+      <button
+        type="button"
+        onClick={() => void signOutCurrentUser()}
+        disabled={authBusy}
+        className="w-full rounded-xl border border-rose-200 bg-white px-4 py-3 text-sm font-semibold text-rose-700 disabled:opacity-50"
+      >
+        {authBusy ? "ログアウト中..." : "ログアウト"}
+      </button>
     </section>
   );
 }

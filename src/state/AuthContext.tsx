@@ -18,6 +18,37 @@ import {
 } from "react";
 import { firebaseAuth } from "../lib/firebase/config";
 
+function getErrorCode(error: unknown): string | null {
+  if (
+    typeof error === "object" &&
+    error &&
+    "code" in error &&
+    typeof error.code === "string"
+  ) {
+    return error.code;
+  }
+
+  return null;
+}
+
+function buildAuthErrorMessage(code: string | null): string {
+  const currentHost =
+    typeof window !== "undefined" ? window.location.hostname : "";
+
+  switch (code) {
+    case "auth/unauthorized-domain":
+      return currentHost
+        ? `Googleログインに失敗しました。Firebase Authentication の承認済みドメインに ${currentHost} を追加してください。`
+        : "Googleログインに失敗しました。Firebase Authentication の承認済みドメイン設定を確認してください。";
+    case "auth/operation-not-allowed":
+      return "Googleログインに失敗しました。Firebase Authentication で Google プロバイダを有効化してください。";
+    case "auth/popup-closed-by-user":
+      return "Googleログインのポップアップが閉じられました。もう一度お試しください。";
+    default:
+      return "Googleログインに失敗しました。Firebaseの認証設定を確認してください。";
+  }
+}
+
 interface AuthContextValue {
   user: User | null;
   loading: boolean;
@@ -37,10 +68,8 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const [authErrorMessage, setAuthErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    void getRedirectResult(firebaseAuth).catch(() => {
-      setAuthErrorMessage(
-        "Googleログインの結果取得に失敗しました。再度お試しください。",
-      );
+    void getRedirectResult(firebaseAuth).catch((error) => {
+      setAuthErrorMessage(buildAuthErrorMessage(getErrorCode(error)));
     });
   }, []);
 
@@ -76,24 +105,24 @@ export function AuthProvider({ children }: PropsWithChildren) {
     try {
       await signInWithPopup(firebaseAuth, provider);
     } catch (error) {
+      const code = getErrorCode(error);
+
       if (
-        typeof error === "object" &&
-        error &&
-        "code" in error &&
-        typeof error.code === "string" &&
-        [
-          "auth/popup-blocked",
-          "auth/popup-closed-by-user",
-          "auth/operation-not-supported-in-this-environment",
-        ].includes(error.code)
+        code === "auth/popup-blocked" ||
+        code === "auth/operation-not-supported-in-this-environment"
       ) {
-        await signInWithRedirect(firebaseAuth, provider);
-        return;
+        try {
+          await signInWithRedirect(firebaseAuth, provider);
+          return;
+        } catch (redirectError) {
+          setAuthErrorMessage(
+            buildAuthErrorMessage(getErrorCode(redirectError)),
+          );
+          return;
+        }
       }
 
-      setAuthErrorMessage(
-        "Googleログインに失敗しました。Firebaseの認証設定を確認してください。",
-      );
+      setAuthErrorMessage(buildAuthErrorMessage(code));
     } finally {
       setAuthBusy(false);
     }

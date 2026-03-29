@@ -27,7 +27,7 @@ VITE_FIREBASE_MESSAGING_SENDER_ID=
 VITE_FIREBASE_APP_ID=
 ```
 
-## Firestore 作成手順（必須）
+## Firebase 作成手順（必須）
 
 このアプリは Firestore へ保存できない場合、保存処理を失敗として扱います。
 
@@ -35,7 +35,14 @@ VITE_FIREBASE_APP_ID=
 2. プロジェクトを選択
 3. Build > Firestore Database > データベースを作成
 4. リージョンを選択して作成
-5. Build > Authentication > Sign-in method > Anonymous を有効化
+5. Build > Authentication > Sign-in method > Google を有効化
+6. Build > Authentication > Settings > 承認済みドメイン に GitHub Pages のドメインを追加
+
+例:
+
+- `localhost`
+- `<your-account>.github.io`
+- 必要なら Firebase の `*.firebaseapp.com`
 
 ## 起動
 

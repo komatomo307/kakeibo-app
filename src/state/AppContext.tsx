@@ -151,7 +151,7 @@ export function AppStateProvider({ children }: PropsWithChildren) {
         });
         dispatch({ type: "setEntries", payload: [] });
         setErrorMessage(
-          "認証またはFirestore未設定のため保存できません。Firebase Consoleで匿名認証とFirestore Databaseを有効化してください。",
+          "未ログインまたはFirestore未設定のため保存できません。Firebase Consoleで認証（Google/匿名）とFirestore Databaseを有効化してください。",
         );
         setLoading(false);
         return;
@@ -215,7 +215,7 @@ export function AppStateProvider({ children }: PropsWithChildren) {
     async (entry: JournalEntry) => {
       if (!userId) {
         setErrorMessage(
-          "認証されていないため保存できません。匿名認証を有効化してください。",
+          "認証されていないため保存できません。Googleまたはゲストでログインしてください。",
         );
         return;
       }
@@ -242,7 +242,7 @@ export function AppStateProvider({ children }: PropsWithChildren) {
     async (entry: JournalEntry) => {
       if (!userId) {
         setErrorMessage(
-          "認証されていないため削除できません。匿名認証を有効化してください。",
+          "認証されていないため削除できません。Googleまたはゲストでログインしてください。",
         );
         return;
       }
@@ -269,7 +269,7 @@ export function AppStateProvider({ children }: PropsWithChildren) {
     async (previousEntry: JournalEntry, nextEntry: JournalEntry) => {
       if (!userId) {
         setErrorMessage(
-          "認証されていないため更新できません。匿名認証を有効化してください。",
+          "認証されていないため更新できません。Googleまたはゲストでログインしてください。",
         );
         return;
       }
@@ -298,7 +298,7 @@ export function AppStateProvider({ children }: PropsWithChildren) {
     async (settings: UserSettings) => {
       if (!userId) {
         setErrorMessage(
-          "認証されていないため設定保存できません。匿名認証を有効化してください。",
+          "認証されていないため設定保存できません。Googleまたはゲストでログインしてください。",
         );
         return;
       }

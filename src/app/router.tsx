@@ -4,10 +4,11 @@ import { DashboardPage } from "../features/dashboard/pages/DashboardPage";
 import { HistoryPage } from "../features/history/pages/HistoryPage";
 import { InputPage } from "../features/input/pages/InputPage";
 import { SettingsPage } from "../features/settings/pages/SettingsPage";
+import { AuthPage } from "../features/auth/pages/AuthPage";
 import { useAuth } from "../state/AuthContext";
 
 export function AppRouter() {
-  const { loading } = useAuth();
+  const { loading, user } = useAuth();
 
   if (loading) {
     return (
@@ -17,6 +18,10 @@ export function AppRouter() {
         </p>
       </MobileLayout>
     );
+  }
+
+  if (!user) {
+    return <AuthPage />;
   }
 
   return (

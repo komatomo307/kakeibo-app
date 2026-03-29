@@ -9,6 +9,7 @@ import {
   type User,
 } from "firebase/auth";
 import {
+  useCallback,
   createContext,
   type PropsWithChildren,
   useContext,
@@ -96,7 +97,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
     };
   }, []);
 
-  const signInWithGoogleAccount = async () => {
+  const signInWithGoogleAccount = useCallback(async () => {
     setAuthBusy(true);
     setAuthErrorMessage(null);
 
@@ -126,16 +127,16 @@ export function AuthProvider({ children }: PropsWithChildren) {
     } finally {
       setAuthBusy(false);
     }
-  };
+  }, []);
 
-  const signInAsGuest = async () => {
+  const signInAsGuest = useCallback(async () => {
     // 匿名認証は一時停止中。再開時は signInAnonymously の import と呼び出しを戻す。
     setAuthErrorMessage(
       "現在ゲスト利用は停止中です。Googleでログインしてください。",
     );
-  };
+  }, []);
 
-  const signOutCurrentUser = async () => {
+  const signOutCurrentUser = useCallback(async () => {
     setAuthBusy(true);
     setAuthErrorMessage(null);
 
@@ -148,7 +149,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
     } finally {
       setAuthBusy(false);
     }
-  };
+  }, []);
 
   const value = useMemo<AuthContextValue>(
     () => ({

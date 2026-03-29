@@ -79,22 +79,35 @@ export async function ensureUserSettings(
     const hasIncomeCategory = existing.categories.some(
       (category) => category.kind === "income",
     );
+    const hasAccountTransferCategory = existing.categories.some(
+      (category) =>
+        category.id === "cat-account-transfer" ||
+        (category.kind === "transfer" && category.name === "口座振替"),
+    );
 
-    if (hasIncomeCategory) {
+    if (hasIncomeCategory && hasAccountTransferCategory) {
       return existing;
     }
 
     const salaryDefault = DEFAULT_CATEGORIES.find(
       (category) => category.kind === "income",
     );
+    const accountTransferDefault = DEFAULT_CATEGORIES.find(
+      (category) => category.id === "cat-account-transfer",
+    );
 
-    if (!salaryDefault) {
+    if ((!hasIncomeCategory && !salaryDefault) || !accountTransferDefault) {
       return existing;
     }
 
+    const defaultsToAdd = [
+      ...(hasIncomeCategory || !salaryDefault ? [] : [salaryDefault]),
+      ...(hasAccountTransferCategory ? [] : [accountTransferDefault]),
+    ];
+
     const migrated: UserSettings = {
       ...existing,
-      categories: [salaryDefault, ...existing.categories].map(
+      categories: [...existing.categories, ...defaultsToAdd].map(
         (item, index) => ({
           ...item,
           order: index,

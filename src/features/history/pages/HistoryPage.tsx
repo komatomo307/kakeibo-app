@@ -122,6 +122,9 @@ export function HistoryPage() {
               <p className="mt-1 text-xs text-slate-500">
                 借方: {entry.debit.accountName} / 貸方:{" "}
                 {entry.credit.accountName}
+                {entry.transferDestinationAccountName
+                  ? ` / 振替先: ${entry.transferDestinationAccountName}`
+                  : ""}
               </p>
               {entry.description ? (
                 <p className="mt-1 text-xs text-slate-500">

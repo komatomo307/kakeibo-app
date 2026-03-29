@@ -15,6 +15,7 @@ export type DefaultCategoryName =
   | "生活費"
   | "固定費"
   | "その他"
+  | "口座振替"
   | "カード引き落とし";
 
 export interface AccountMaster {
@@ -46,6 +47,8 @@ export interface JournalEntry {
   inputCategoryName: string;
   paymentSourceAccountId: string;
   paymentSourceAccountName: string;
+  transferDestinationAccountId?: string;
+  transferDestinationAccountName?: string;
   isTransferLike?: boolean;
   isSystemGenerated?: boolean;
   systemType?: "opening-balance";
@@ -97,6 +100,7 @@ export interface TransactionInputDraft {
   occurredOn: ISODate;
   categoryId: string;
   paymentSourceAccountId: string;
+  transferDestinationAccountId?: string;
   amount: number;
   description?: string;
 }
@@ -132,11 +136,18 @@ export const DEFAULT_CATEGORIES: UserCategory[] = [
     order: 4,
   },
   {
+    id: "cat-account-transfer",
+    name: "口座振替",
+    kind: "transfer",
+    isDefault: true,
+    order: 5,
+  },
+  {
     id: "cat-card-payment",
     name: "カード引き落とし",
     kind: "transfer",
     isDefault: true,
-    order: 5,
+    order: 6,
   },
 ];
 

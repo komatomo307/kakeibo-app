@@ -44,6 +44,16 @@ export function buildJournalEntry({
   const amount = Math.trunc(Math.abs(draft.amount));
   const isCardPayment = category.name === CARD_PAYMENT_CATEGORY_NAME;
   const isIncome = category.kind === "income";
+  const isAccountTransfer = category.kind === "transfer" && !isCardPayment;
+  const transferDestination = isAccountTransfer
+    ? paymentSources.find(
+        (item) => item.id === draft.transferDestinationAccountId,
+      )
+    : undefined;
+
+  if (isAccountTransfer && !transferDestination) {
+    throw new Error("振替先が見つかりません。");
+  }
 
   const debit = isCardPayment
     ? {
@@ -59,12 +69,19 @@ export function buildJournalEntry({
           accountKind: paymentSource.accountKind,
           amount,
         }
-      : {
-          accountId: category.id,
-          accountName: category.name,
-          accountKind: "expense" as const,
-          amount,
-        };
+      : isAccountTransfer && transferDestination
+        ? {
+            accountId: transferDestination.id,
+            accountName: transferDestination.name,
+            accountKind: transferDestination.accountKind,
+            amount,
+          }
+        : {
+            accountId: category.id,
+            accountName: category.name,
+            accountKind: "expense" as const,
+            amount,
+          };
 
   const credit = isCardPayment
     ? {
@@ -80,12 +97,19 @@ export function buildJournalEntry({
           accountKind: "income" as const,
           amount,
         }
-      : {
-          accountId: paymentSource.id,
-          accountName: paymentSource.name,
-          accountKind: paymentSource.accountKind,
-          amount,
-        };
+      : isAccountTransfer
+        ? {
+            accountId: paymentSource.id,
+            accountName: paymentSource.name,
+            accountKind: paymentSource.accountKind,
+            amount,
+          }
+        : {
+            accountId: paymentSource.id,
+            accountName: paymentSource.name,
+            accountKind: paymentSource.accountKind,
+            amount,
+          };
 
   return {
     id: crypto.randomUUID(),
@@ -100,7 +124,9 @@ export function buildJournalEntry({
     inputCategoryName: category.name,
     paymentSourceAccountId: paymentSource.id,
     paymentSourceAccountName: paymentSource.name,
-    isTransferLike: isCardPayment,
+    transferDestinationAccountId: transferDestination?.id,
+    transferDestinationAccountName: transferDestination?.name,
+    isTransferLike: isCardPayment || isAccountTransfer,
     createdAt: now,
     updatedAt: now,
   };

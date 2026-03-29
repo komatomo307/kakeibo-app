@@ -41,6 +41,7 @@ export function createMonthlyWorkbook(
       借方勘定: entry.debit.accountName,
       貸方勘定: entry.credit.accountName,
       支払元: entry.paymentSourceAccountName,
+      振替先: entry.transferDestinationAccountName ?? "",
       金額: toJpy(entry.debit.amount),
       摘要: entry.description ?? "",
     }));
@@ -68,6 +69,7 @@ export function createMonthlyWorkbook(
               借方勘定: "-",
               貸方勘定: "-",
               支払元: "-",
+              振替先: "-",
               金額: 0,
               摘要: "",
             },

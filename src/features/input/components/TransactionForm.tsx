@@ -29,6 +29,8 @@ export function TransactionForm({ mode }: TransactionFormProps) {
   const [paymentSourceAccountId, setPaymentSourceAccountId] = useState(
     settings.paymentSources[0]?.id ?? "",
   );
+  const [transferDestinationAccountId, setTransferDestinationAccountId] =
+    useState("");
   const [description, setDescription] = useState("");
   const [amount, setAmount] = useState("");
 
@@ -58,14 +60,61 @@ export function TransactionForm({ mode }: TransactionFormProps) {
     }
   }, [settings.paymentSources, paymentSourceAccountId]);
 
+  const selectedCategory = useMemo(
+    () => settings.categories.find((item) => item.id === categoryId),
+    [settings.categories, categoryId],
+  );
+
+  const isTransferCategory = selectedCategory?.kind === "transfer";
+  const isCardPaymentCategory = selectedCategory?.name === "カード引き落とし";
+  const requiresTransferDestination =
+    isTransferCategory && !isCardPaymentCategory;
+
+  const transferDestinationOptions = useMemo(
+    () =>
+      settings.paymentSources.filter(
+        (item) => item.id !== paymentSourceAccountId,
+      ),
+    [settings.paymentSources, paymentSourceAccountId],
+  );
+
+  useEffect(() => {
+    if (!requiresTransferDestination) {
+      setTransferDestinationAccountId("");
+      return;
+    }
+
+    if (
+      !transferDestinationOptions.find(
+        (item) => item.id === transferDestinationAccountId,
+      )
+    ) {
+      setTransferDestinationAccountId(transferDestinationOptions[0]?.id ?? "");
+    }
+  }, [
+    requiresTransferDestination,
+    transferDestinationOptions,
+    transferDestinationAccountId,
+  ]);
+
   const canSubmit = useMemo(
     () =>
       Number(amount) > 0 &&
       categoryId.length > 0 &&
       paymentSourceAccountId.length > 0 &&
+      (!requiresTransferDestination ||
+        transferDestinationAccountId.length > 0) &&
       availableCategories.length > 0 &&
       settings.paymentSources.length > 0,
-    [amount, categoryId, paymentSourceAccountId, availableCategories, settings],
+    [
+      amount,
+      categoryId,
+      paymentSourceAccountId,
+      requiresTransferDestination,
+      transferDestinationAccountId,
+      availableCategories,
+      settings,
+    ],
   );
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -81,6 +130,7 @@ export function TransactionForm({ mode }: TransactionFormProps) {
         occurredOn,
         categoryId,
         paymentSourceAccountId,
+        transferDestinationAccountId: transferDestinationAccountId || undefined,
         amount: Number(amount),
         description,
       },
@@ -137,7 +187,11 @@ export function TransactionForm({ mode }: TransactionFormProps) {
 
       <div>
         <label className="mb-1 block text-xs font-semibold text-slate-600">
-          {mode === "income" ? "入金先" : "支払元"}
+          {mode === "income"
+            ? "入金先"
+            : requiresTransferDestination
+              ? "出金元"
+              : "支払元"}
         </label>
         <select
           value={paymentSourceAccountId}
@@ -151,6 +205,27 @@ export function TransactionForm({ mode }: TransactionFormProps) {
           ))}
         </select>
       </div>
+
+      {requiresTransferDestination ? (
+        <div>
+          <label className="mb-1 block text-xs font-semibold text-slate-600">
+            振替先
+          </label>
+          <select
+            value={transferDestinationAccountId}
+            onChange={(event) =>
+              setTransferDestinationAccountId(event.target.value)
+            }
+            className="w-full rounded-xl border border-slate-300 px-3 py-3 text-base"
+          >
+            {transferDestinationOptions.map((source) => (
+              <option key={source.id} value={source.id}>
+                {source.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      ) : null}
 
       <div>
         <label className="mb-1 block text-xs font-semibold text-slate-600">

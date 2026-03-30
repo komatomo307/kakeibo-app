@@ -164,7 +164,7 @@ export function TransactionForm({ mode }: TransactionFormProps) {
           type="date"
           value={occurredOn}
           onChange={(event) => setOccurredOn(event.target.value)}
-          className="w-full rounded-xl border border-slate-300 px-3 py-3 text-base"
+          className="h-12 w-full min-w-0 rounded-xl border border-slate-300 px-3 py-3 text-base"
         />
       </div>
 

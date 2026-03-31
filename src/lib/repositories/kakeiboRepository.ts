@@ -9,6 +9,7 @@ import {
   setDoc,
 } from "firebase/firestore";
 import dayjs from "dayjs";
+import { buildJournalEntry } from "../../domain/accounting/autoJournal";
 import {
   calculateEntriesBalanceDelta,
   mergeBalanceSnapshots,
@@ -20,6 +21,7 @@ import {
   DEFAULT_PAYMENT_SOURCES,
   type JournalEntry,
   type MonthlyTransactionsMeta,
+  type SubscriptionRule,
   type UserSettings,
   type YYYYMM,
 } from "../../domain/models/accounting";
@@ -64,6 +66,7 @@ function createDefaultSettings(userId: string): UserSettings {
     currency: "JPY",
     categories: DEFAULT_CATEGORIES,
     paymentSources: DEFAULT_PAYMENT_SOURCES,
+    subscriptions: [],
     updatedAt: Date.now(),
   };
 }
@@ -84,8 +87,9 @@ export async function ensureUserSettings(
         category.id === "cat-account-transfer" ||
         (category.kind === "transfer" && category.name === "口座振替"),
     );
+    const hasSubscriptions = Array.isArray(existing.subscriptions);
 
-    if (hasIncomeCategory && hasAccountTransferCategory) {
+    if (hasIncomeCategory && hasAccountTransferCategory && hasSubscriptions) {
       return existing;
     }
 
@@ -113,6 +117,7 @@ export async function ensureUserSettings(
           order: index,
         }),
       ),
+      subscriptions: hasSubscriptions ? existing.subscriptions : [],
       updatedAt: Date.now(),
     };
 
@@ -207,6 +212,108 @@ export async function ensureMonthlyOpeningSnapshot(
   );
 
   return currentOpeningSnapshot;
+}
+
+function buildSubscriptionEntryId(
+  subscriptionId: string,
+  monthKey: YYYYMM,
+): string {
+  return `sub-${subscriptionId}-${monthKey}`;
+}
+
+function shouldPostSubscription(
+  monthKey: YYYYMM,
+  subscription: SubscriptionRule,
+): boolean {
+  return subscription.active && monthKey >= subscription.startMonthKey;
+}
+
+export async function ensureMonthlySubscriptionEntries(
+  userId: string,
+  monthKey: YYYYMM,
+  settings: UserSettings,
+  currentMonthEntries?: JournalEntry[],
+): Promise<boolean> {
+  const subscriptions = settings.subscriptions ?? [];
+  if (subscriptions.length === 0) {
+    return false;
+  }
+
+  const existingEntries =
+    currentMonthEntries ?? (await fetchMonthlyEntries(userId, monthKey));
+  const existingEntryIds = new Set(existingEntries.map((entry) => entry.id));
+  const monthStartDate = dayjs(`${monthKey}01`).format("YYYY-MM-DD");
+
+  const entriesToInsert: JournalEntry[] = [];
+
+  for (const subscription of subscriptions) {
+    if (!shouldPostSubscription(monthKey, subscription)) {
+      continue;
+    }
+
+    const category = settings.categories.find(
+      (item) => item.id === subscription.categoryId,
+    );
+    const paymentSource = settings.paymentSources.find(
+      (item) => item.id === subscription.paymentSourceAccountId,
+    );
+
+    if (!category || !paymentSource || category.kind !== "expense") {
+      continue;
+    }
+
+    const subscriptionEntryId = buildSubscriptionEntryId(
+      subscription.id,
+      monthKey,
+    );
+    if (existingEntryIds.has(subscriptionEntryId)) {
+      continue;
+    }
+
+    const entry = buildJournalEntry({
+      userId,
+      draft: {
+        occurredOn: monthStartDate,
+        categoryId: subscription.categoryId,
+        paymentSourceAccountId: subscription.paymentSourceAccountId,
+        amount: subscription.amount,
+        description: subscription.description,
+      },
+      categories: settings.categories,
+      paymentSources: settings.paymentSources,
+    });
+
+    entriesToInsert.push({
+      ...entry,
+      id: subscriptionEntryId,
+      isSystemGenerated: true,
+      systemType: "subscription",
+    });
+  }
+
+  if (entriesToInsert.length === 0) {
+    return false;
+  }
+
+  await Promise.all(
+    entriesToInsert.map((entry) =>
+      setDoc(entryDocRef(userId, monthKey, entry.id), entry, {
+        merge: true,
+      }),
+    ),
+  );
+
+  await setDoc(
+    monthlyDocRef(userId, monthKey),
+    {
+      monthKey,
+      userId,
+      updatedAt: Date.now(),
+    },
+    { merge: true },
+  );
+
+  return true;
 }
 
 export async function upsertJournalEntry(

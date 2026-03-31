@@ -10,7 +10,7 @@ interface TransactionFormProps {
 }
 
 export function TransactionForm({ mode }: TransactionFormProps) {
-  const { state, addEntry, syncing } = useAppState();
+  const { state, addEntry, saveSettings, syncing } = useAppState();
 
   if (!state.settings) {
     return (
@@ -31,6 +31,7 @@ export function TransactionForm({ mode }: TransactionFormProps) {
   );
   const [transferDestinationAccountId, setTransferDestinationAccountId] =
     useState("");
+  const [registerAsSubscription, setRegisterAsSubscription] = useState(false);
   const [description, setDescription] = useState("");
   const [amount, setAmount] = useState("");
 
@@ -69,6 +70,13 @@ export function TransactionForm({ mode }: TransactionFormProps) {
   const isCardPaymentCategory = selectedCategory?.name === "カード引き落とし";
   const requiresTransferDestination =
     isTransferCategory && !isCardPaymentCategory;
+  const canRegisterSubscription = selectedCategory?.kind === "expense";
+
+  useEffect(() => {
+    if (!canRegisterSubscription) {
+      setRegisterAsSubscription(false);
+    }
+  }, [canRegisterSubscription]);
 
   const transferDestinationOptions = useMemo(
     () =>
@@ -139,8 +147,40 @@ export function TransactionForm({ mode }: TransactionFormProps) {
     });
 
     await addEntry(journalEntry);
+
+    if (registerAsSubscription && selectedCategory) {
+      const currentSubscriptions = settings.subscriptions ?? [];
+      const duplicate = currentSubscriptions.some(
+        (subscription) =>
+          subscription.categoryId === categoryId &&
+          subscription.paymentSourceAccountId === paymentSourceAccountId &&
+          subscription.amount === Number(amount) &&
+          (subscription.description ?? "") === description.trim(),
+      );
+
+      if (!duplicate) {
+        await saveSettings({
+          ...settings,
+          subscriptions: [
+            ...currentSubscriptions,
+            {
+              id: crypto.randomUUID(),
+              categoryId,
+              paymentSourceAccountId,
+              amount: Math.trunc(Math.abs(Number(amount))),
+              description: description.trim() || undefined,
+              startMonthKey: dayjs(occurredOn).add(1, "month").format("YYYYMM"),
+              active: true,
+            },
+          ],
+          updatedAt: Date.now(),
+        });
+      }
+    }
+
     setAmount("");
     setDescription("");
+    setRegisterAsSubscription(false);
   };
 
   return (
@@ -239,6 +279,20 @@ export function TransactionForm({ mode }: TransactionFormProps) {
           className="w-full rounded-xl border border-slate-300 px-3 py-3 text-base"
         />
       </div>
+
+      {canRegisterSubscription ? (
+        <label className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+          <input
+            type="checkbox"
+            checked={registerAsSubscription}
+            onChange={(event) =>
+              setRegisterAsSubscription(event.target.checked)
+            }
+            className="h-4 w-4"
+          />
+          この内容をサブスク登録する（翌月から毎月1日に自動計上）
+        </label>
+      ) : null}
 
       <div>
         <label className="mb-1 block text-xs font-semibold text-slate-600">

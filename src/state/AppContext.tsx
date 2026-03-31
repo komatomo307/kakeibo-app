@@ -19,6 +19,7 @@ import {
 import {
   deleteJournalEntry,
   ensureMonthlyOpeningSnapshot,
+  ensureMonthlySubscriptionEntries,
   ensureUserSettings,
   fetchMonthlyEntries,
   saveUserSettings as saveUserSettingsRepository,
@@ -136,11 +137,21 @@ export function AppStateProvider({ children }: PropsWithChildren) {
       return;
     }
 
+    if (state.settings) {
+      await withTimeout(
+        ensureMonthlySubscriptionEntries(
+          userId,
+          state.selectedMonthKey,
+          state.settings,
+        ),
+      );
+    }
+
     const rows = await withTimeout(
       fetchMonthlyEntries(userId, state.selectedMonthKey),
     );
     dispatch({ type: "setEntries", payload: rows });
-  }, [userId, state.selectedMonthKey]);
+  }, [userId, state.selectedMonthKey, state.settings]);
 
   useEffect(() => {
     let active = true;
@@ -154,6 +165,7 @@ export function AppStateProvider({ children }: PropsWithChildren) {
           currency: "JPY",
           categories: DEFAULT_CATEGORIES,
           paymentSources: DEFAULT_PAYMENT_SOURCES,
+          subscriptions: [],
           updatedAt: Date.now(),
         };
 
@@ -180,6 +192,13 @@ export function AppStateProvider({ children }: PropsWithChildren) {
         const openingBalancesSnapshot = await withTimeout(
           ensureMonthlyOpeningSnapshot(userId, state.selectedMonthKey),
         );
+        await withTimeout(
+          ensureMonthlySubscriptionEntries(
+            userId,
+            state.selectedMonthKey,
+            settings,
+          ),
+        );
         const rows = await withTimeout(
           fetchMonthlyEntries(userId, state.selectedMonthKey),
         );
@@ -202,6 +221,7 @@ export function AppStateProvider({ children }: PropsWithChildren) {
             currency: "JPY",
             categories: DEFAULT_CATEGORIES,
             paymentSources: DEFAULT_PAYMENT_SOURCES,
+            subscriptions: [],
             updatedAt: Date.now(),
           };
 

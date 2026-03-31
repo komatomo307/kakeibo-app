@@ -51,7 +51,7 @@ export interface JournalEntry {
   transferDestinationAccountName?: string;
   isTransferLike?: boolean;
   isSystemGenerated?: boolean;
-  systemType?: "opening-balance";
+  systemType?: "opening-balance" | "subscription";
   createdAt: number;
   updatedAt: number;
 }
@@ -86,6 +86,16 @@ export interface PaymentSource {
   archived?: boolean;
 }
 
+export interface SubscriptionRule {
+  id: string;
+  categoryId: string;
+  paymentSourceAccountId: string;
+  amount: number;
+  description?: string;
+  startMonthKey: YYYYMM;
+  active: boolean;
+}
+
 export interface UserSettings {
   userId: string;
   timezone: "Asia/Tokyo";
@@ -93,6 +103,7 @@ export interface UserSettings {
   currency: CurrencyCode;
   categories: UserCategory[];
   paymentSources: PaymentSource[];
+  subscriptions: SubscriptionRule[];
   updatedAt: number;
 }
 

@@ -125,6 +125,23 @@ export function SettingsPage() {
     }
   };
 
+  const handleDeleteSubscription = async (subscriptionId: string) => {
+    await saveSettings({
+      ...settings,
+      subscriptions: (settings.subscriptions ?? []).filter(
+        (subscription) => subscription.id !== subscriptionId,
+      ),
+      updatedAt: Date.now(),
+    });
+  };
+
+  const categoryNameById = new Map(
+    settings.categories.map((category) => [category.id, category.name]),
+  );
+  const paymentSourceNameById = new Map(
+    settings.paymentSources.map((source) => [source.id, source.name]),
+  );
+
   return (
     <section className="space-y-4">
       <header>
@@ -207,6 +224,53 @@ export function SettingsPage() {
             追加
           </button>
         </div>
+      </article>
+
+      <article className="rounded-2xl bg-white p-4 shadow-sm">
+        <h2 className="text-sm font-semibold text-slate-700">サブスク登録</h2>
+        <p className="mt-1 text-xs text-slate-500">
+          入力画面で登録したサブスクの一覧です。不要なものは削除できます。
+        </p>
+
+        <ul className="mt-3 space-y-2">
+          {(settings.subscriptions ?? []).length === 0 ? (
+            <li className="text-xs text-slate-500">登録はありません。</li>
+          ) : (
+            (settings.subscriptions ?? []).map((subscription) => (
+              <li
+                key={subscription.id}
+                className="rounded-xl border border-slate-200 bg-slate-50 p-3"
+              >
+                <p className="text-sm font-semibold text-slate-800">
+                  {categoryNameById.get(subscription.categoryId) ??
+                    "(カテゴリ不明)"}
+                </p>
+                <p className="mt-1 text-xs text-slate-600">
+                  支払元:{" "}
+                  {paymentSourceNameById.get(
+                    subscription.paymentSourceAccountId,
+                  ) ?? "(口座不明)"}
+                </p>
+                <p className="mt-1 text-xs text-slate-600">
+                  金額: {subscription.amount.toLocaleString()}円 / 開始月:{" "}
+                  {subscription.startMonthKey}
+                </p>
+                {subscription.description ? (
+                  <p className="mt-1 text-xs text-slate-600">
+                    摘要: {subscription.description}
+                  </p>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => void handleDeleteSubscription(subscription.id)}
+                  className="mt-2 rounded-lg border border-rose-200 px-2 py-1 text-xs font-semibold text-rose-700"
+                >
+                  サブスク解除
+                </button>
+              </li>
+            ))
+          )}
+        </ul>
       </article>
 
       <article className="rounded-2xl bg-white p-4 shadow-sm">
